@@ -1,0 +1,280 @@
+{
+  "exercises": {
+    "squat": {
+      "name_zh": "深蹲",
+      "name_en": "Squat",
+      "category": "fitness",
+      "down_angle": 110,
+      "up_angle": 160,
+      "keypoints": {
+        "left": [11, 13, 15],
+        "right": [12, 14, 16]
+      },
+      "is_leg_exercise": false,
+      "angle_point": [12, 14, 16],
+      "safety_thresholds": {
+        "knee": {"min": 90, "max": 160, "warning_min": 100, "warning_max": 150},
+        "back": {"min": 140, "max": 180, "warning_min": 150, "warning_max": 180}
+      },
+      "voice_tips": {
+        "knee_min": "膝盖弯曲角度过小，请稍微站直一些",
+        "knee_max": "膝盖弯曲超过安全范围，请减小下蹲深度",
+        "back_min": "请保持背部挺直，不要弯腰"
+      },
+      "avatar_frames": [
+        {"hip": 0, "knee": 170, "ankle": 170},
+        {"hip": 0, "knee": 110, "ankle": 110},
+        {"hip": 0, "knee": 170, "ankle": 170}
+      ]
+    },
+    "pushup": {
+      "name_zh": "俯卧撑",
+      "name_en": "Push-up",
+      "category": "fitness",
+      "down_angle": 130,
+      "up_angle": 160,
+      "keypoints": {
+        "left": [5, 7, 9],
+        "right": [6, 8, 10]
+      },
+      "is_leg_exercise": false,
+      "angle_point": [6, 8, 10],
+      "safety_thresholds": {
+        "elbow": {"min": 90, "max": 180, "warning_min": 100, "warning_max": 170},
+        "back": {"min": 150, "max": 180, "warning_min": 160, "warning_max": 180}
+      },
+      "voice_tips": {
+        "elbow_min": "手臂弯曲角度过小，请不要过度下压",
+        "back_min": "请保持身体呈一条直线，核心收紧"
+      },
+      "avatar_frames": [
+        {"shoulder": 0, "elbow": 170, "wrist": 170, "hip": 170, "knee": 170},
+        {"shoulder": 0, "elbow": 120, "wrist": 120, "hip": 170, "knee": 170},
+        {"shoulder": 0, "elbow": 170, "wrist": 170, "hip": 170, "knee": 170}
+      ]
+    },
+    "situp": {
+      "name_zh": "仰卧起坐",
+      "name_en": "Sit-up",
+      "category": "fitness",
+      "down_angle": 145,
+      "up_angle": 160,
+      "keypoints": {
+        "left": [5, 11, 15],
+        "right": [6, 12, 16]
+      },
+      "is_leg_exercise": false,
+      "angle_point": [5, 11, 12],
+      "safety_thresholds": {
+        "neck": {"min": 130, "max": 180, "warning_min": 140, "warning_max": 180}
+      },
+      "voice_tips": {
+        "neck_min": "请不要用手拉扯头部，用腹部发力"
+      },
+      "avatar_frames": [
+        {"hip": 160, "knee": 120},
+        {"hip": 110, "knee": 120},
+        {"hip": 160, "knee": 120}
+      ]
+    },
+    "bicep_curl": {
+      "name_zh": "弯举",
+      "name_en": "Bicep Curl",
+      "category": "fitness",
+      "down_angle": 160,
+      "up_angle": 60,
+      "keypoints": {
+        "left": [5, 7, 9],
+        "right": [6, 8, 10]
+      },
+      "is_leg_exercise": false,
+      "angle_point": [6, 8, 10],
+      "safety_thresholds": {
+        "elbow": {"min": 50, "max": 170, "warning_min": 60, "warning_max": 160},
+        "shoulder": {"min": 0, "max": 45, "warning_min": 0, "warning_max": 30}
+      },
+      "voice_tips": {
+        "elbow_min": "弯曲角度过大，请控制动作幅度",
+        "shoulder_max": "请不要晃动肩膀，保持大臂贴近身体"
+      },
+      "avatar_frames": [
+        {"shoulder": 10, "elbow": 160, "wrist": 160},
+        {"shoulder": 10, "elbow": 70, "wrist": 70},
+        {"shoulder": 10, "elbow": 160, "wrist": 160}
+      ]
+    },
+    "lateral_raise": {
+      "name_zh": "侧平举",
+      "name_en": "Lateral Raise",
+      "category": "fitness",
+      "down_angle": 30,
+      "up_angle": 80,
+      "keypoints": {
+        "left": [11, 5, 7],
+        "right": [12, 6, 8]
+      },
+      "is_leg_exercise": false,
+      "angle_point": [12, 6, 8],
+      "safety_thresholds": {
+        "shoulder": {"min": 10, "max": 100, "warning_min": 20, "warning_max": 90}
+      },
+      "voice_tips": {
+        "shoulder_max": "手臂不要举得过高，避免肩峰撞击"
+      },
+      "avatar_frames": [
+        {"shoulder": 20, "elbow": 170, "wrist": 170},
+        {"shoulder": 80, "elbow": 170, "wrist": 170},
+        {"shoulder": 20, "elbow": 170, "wrist": 170}
+      ]
+    },
+    "overhead_press": {
+      "name_zh": "推举",
+      "name_en": "Overhead Press",
+      "category": "fitness",
+      "down_angle": 100,
+      "up_angle": 150,
+      "keypoints": {
+        "left": [11, 5, 7],
+        "right": [12, 6, 8]
+      },
+      "is_leg_exercise": false,
+      "angle_point": [12, 6, 8],
+      "safety_thresholds": {
+        "shoulder": {"min": 60, "max": 170, "warning_min": 70, "warning_max": 160},
+        "lower_back": {"min": 150, "max": 180, "warning_min": 160, "warning_max": 180}
+      },
+      "voice_tips": {
+        "lower_back_min": "请收紧核心，不要过度挺腰"
+      },
+      "avatar_frames": [
+        {"shoulder": 90, "elbow": 100, "wrist": 100},
+        {"shoulder": 160, "elbow": 160, "wrist": 160},
+        {"shoulder": 90, "elbow": 100, "wrist": 100}
+      ]
+    },
+    "leg_raise": {
+      "name_zh": "抬腿",
+      "name_en": "Leg Raise",
+      "category": "fitness",
+      "down_angle": 130,
+      "up_angle": 160,
+      "keypoints": {
+        "left": [5, 11, 15],
+        "right": [6, 12, 16]
+      },
+      "is_leg_exercise": true,
+      "angle_point": [6, 12, 16],
+      "safety_thresholds": {
+        "lower_back": {"min": 140, "max": 180, "warning_min": 150, "warning_max": 180}
+      },
+      "voice_tips": {
+        "lower_back_min": "请保持下背部贴地，不要拱腰"
+      },
+      "avatar_frames": [
+        {"hip": 170, "knee": 170},
+        {"hip": 90, "knee": 170},
+        {"hip": 170, "knee": 170}
+      ]
+    },
+    "plank": {
+      "name_zh": "平板支撑",
+      "name_en": "Plank",
+      "category": "fitness",
+      "down_angle": 160,
+      "up_angle": 175,
+      "keypoints": {
+        "left": [5, 11, 15],
+        "right": [6, 12, 16]
+      },
+      "is_leg_exercise": false,
+      "angle_point": [5, 11, 15],
+      "safety_thresholds": {
+        "back": {"min": 150, "max": 180, "warning_min": 160, "warning_max": 180},
+        "hip": {"min": 150, "max": 180, "warning_min": 160, "warning_max": 180}
+      },
+      "voice_tips": {
+        "back_min": "请保持背部挺直",
+        "hip_min": "请不要塌腰或翘臀"
+      },
+      "avatar_frames": [
+        {"shoulder": 90, "elbow": 90, "hip": 170, "knee": 170}
+      ],
+      "is_static": true
+    },
+    "lunge": {
+      "name_zh": "弓步蹲",
+      "name_en": "Lunge",
+      "category": "fitness",
+      "down_angle": 90,
+      "up_angle": 160,
+      "keypoints": {
+        "left": [11, 13, 15],
+        "right": [12, 14, 16]
+      },
+      "is_leg_exercise": true,
+      "angle_point": [12, 14, 16],
+      "safety_thresholds": {
+        "knee": {"min": 80, "max": 170, "warning_min": 90, "warning_max": 160}
+      },
+      "voice_tips": {
+        "knee_min": "前腿膝盖不要超过脚尖"
+      },
+      "avatar_frames": [
+        {"hip": 170, "knee_front": 170, "knee_back": 170},
+        {"hip": 0, "knee_front": 90, "knee_back": 90},
+        {"hip": 170, "knee_front": 170, "knee_back": 170}
+      ]
+    },
+    "posture_1": {
+      "name_zh": "形体训练 - 站姿",
+      "name_en": "Posture Training - Standing",
+      "category": "dance",
+      "down_angle": 160,
+      "up_angle": 180,
+      "keypoints": {
+        "left": [5, 11, 15],
+        "right": [6, 12, 16]
+      },
+      "is_leg_exercise": false,
+      "angle_point": [5, 11, 15],
+      "safety_thresholds": {
+        "back": {"min": 160, "max": 180, "warning_min": 170, "warning_max": 180},
+        "shoulder": {"min": 160, "max": 180, "warning_min": 170, "warning_max": 180}
+      },
+      "voice_tips": {
+        "back_min": "请保持腰背挺直",
+        "shoulder_min": "请打开肩膀，不要含胸"
+      },
+      "avatar_frames": [
+        {"shoulder": 175, "back": 175, "hip": 175, "knee": 175}
+      ],
+      "is_static": true
+    },
+    "stretch_1": {
+      "name_zh": "拉伸 - 侧腰伸展",
+      "name_en": "Stretch - Side Bend",
+      "category": "dance",
+      "down_angle": 120,
+      "up_angle": 160,
+      "keypoints": {
+        "left": [5, 11, 13],
+        "right": [6, 12, 14]
+      },
+      "is_leg_exercise": false,
+      "angle_point": [5, 11, 13],
+      "safety_thresholds": {
+        "spine": {"min": 120, "max": 180, "warning_min": 130, "warning_max": 170}
+      },
+      "voice_tips": {
+        "spine_min": "侧弯幅度适中，不要过度拉伸"
+      },
+      "avatar_frames": [
+        {"spine": 180, "arm_left": 180, "arm_right": 180},
+        {"spine": 140, "arm_left": 160, "arm_right": 140},
+        {"spine": 180, "arm_left": 180, "arm_right": 180},
+        {"spine": 140, "arm_left": 140, "arm_right": 160},
+        {"spine": 180, "arm_left": 180, "arm_right": 180}
+      ]
+    }
+  }
+}

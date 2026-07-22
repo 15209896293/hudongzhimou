@@ -1,0 +1,340 @@
+============================================================
+提示词：护动智眸 PyQt5 前端 UI 全面美化 v2
+============================================================
+
+【核心铁律 — 违反任意一条即不合格】
+1. 只改视觉样式和布局排版，不改任何业务逻辑、信号连接、数据持久化
+2. 所有现有控件的变量名、objectName、信号名、方法签名必须原样保留
+3. 所有功能必须保留，包括但不限于：摄像头切换、GPU检测、语音开关、计数增减、记录确认、阶段显示、安全检测、统计面板、目标设置、月份导航、用户档案折叠、语言切换
+
+【设计系统 — 所有文件统一使用】
+
+颜色变量（在 styles.py 中定义，其他文件通过方法调用）：
+  BG = #000000          # 全局背景（纯黑）
+  CARD = #1C1C1E        # 卡片背景
+  SURFACE = #2C2C2E     # 按钮/输入框背景
+  TEXT = #FFFFFF        # 主文字
+  TEXT2 = #8E8E93       # 次级文字
+  TEXT3 = #636366       # 三级文字
+  BORDER = #38383A      # 分隔线/边框
+  GREEN = #34C759       # 安全/成功
+  ORANGE = #FF9500      # 警告
+  RED = #FF3B30         # 危险/错误
+  BLUE = #0A84FF        # 强调/确认
+
+字体：
+  全局：Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
+  大数字：font-weight: 300, font-size: 64pt
+  卡片标题：font-weight: 600, font-size: 17px, color: #FFFFFF
+  正文：font-weight: 400, font-size: 15px
+  标签：font-weight: 500, font-size: 13px, color: #8E8E93, uppercase, letter-spacing: 0.5px
+
+圆角：
+  大卡片：24px
+  按钮/输入框/下拉框：12px
+  小标签/pill：100px（完全圆角）
+
+布局原则：
+  - 取消所有 QGroupBox 的边框和标题样式（改用 QWidget + 卡片背景）
+  - 用背景色差异代替边框区分层次
+  - 卡片内边距：20px
+  - 卡片间距：16px
+  - 禁止 text-shadow、禁止渐变背景（除品牌标题外）
+
+【文件改造清单 — 共 10 个文件】
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+一、styles.py（样式中心 — 全部重写）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+保留：EXERCISE_COLORS 字典，更新颜色值为苹果鲜艳色
+
+重写以下方法（函数签名不变）：
+- get_window_palette() → 背景 #000000，文字 #FFFFFF
+- get_global_stylesheet() → QWidget 全局黑底白字 + 字体设置
+- get_exercise_combo_style() → 深色下拉框（#2C2C2E 背景，白字，12px 圆角）
+- get_camera_combo_style() → 同上
+- get_counter_value_style(color) → 大数字轻量样式（64pt, weight 300, 白色，无边框，透明背景）
+- get_success_counter_style() → 数字颜色变 #34C759
+- get_phase_indicator_style(active, color) → iOS pill 按钮（大圆角，颜色填充）
+- get_group_box_style() → 返回最小化样式（border: none; margin-top: 0）
+- get_increase_button_style() → #34C759 绿底黑字，12px 圆角
+- get_decrease_button_style() → #FF9500 橙底黑字，12px 圆角
+- get_reset_button_style() → #2C2C2E 灰底白字，12px 圆角
+- get_confirm_button_style() → #0A84FF 蓝底黑字，12px 圆角
+- get_success_button_style() → #34C759 绿底黑字，12px 圆角
+- get_toggle_button_style(checked) → 重写为 iOS 风格
+
+新增方法：
+- get_card_style() → background: #1C1C1E; border-radius: 24px; padding: 20px;
+- get_section_title_style() → 13px uppercase 标签样式
+- get_status_badge_style(level) → 根据安全等级返回 pill 标签样式（level=0 绿色背景，1 橙色，2 红色）
+- get_dark_input_style() → 输入框/SpinBox 深色样式（#2C2C2E 背景，白字，聚焦时边框 #34C759）
+- get_scrollbar_style() → 深色滚动条（细条，#38383A 轨道，#636366 滑块）
+- get_table_style() → 深色表格样式（无边框线，表头 #2C2C2E，行交替 #1C1C1E/#000000）
+- get_progressbar_style(color) → 深色进度条（细条 8px，#2C2C2E 背景轨道，彩色填充）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+二、main_window.py（主窗口布局 — 调整比例+状态栏）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【必须保留】
+- 所有方法：__init__, _register_nvidia_dll_dirs, _detect_device, _init_core_components,
+  setup_ui, connect_signals, _init_panels, setup_video_thread, start_video,
+  _on_camera_error, _on_voice_toggle_changed, closeEvent
+- 所有组件引用：app_state, mode_manager, menu_manager, stats_manager,
+  counter_manager, frame_pipeline, video_processor, app_controller,
+  video_display, safety_panel, control_panel, user_profile_panel, stats_panel,
+  video_thread, pose_processor, exercise_counter, sound_manager,
+  workout_tracker, safety_detector, statusBar
+- 所有信号连接逻辑
+- 左右布局结构（左侧视频 + 右侧控制区）
+
+【改造要点】
+1. 左右比例从 7:3 改为 6:4（右侧需要更多空间放控制面板）
+2. 状态栏样式：背景 #1C1C1E，文字 #8E8E93，去掉边框
+3. 整体窗口背景设为 #000000
+4. 右侧区域 right_widget 增加内边距和间距，使卡片之间有呼吸感
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+三、control_panel.py（控制面板 — 卡片化改造）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【必须保留的完整清单】
+控件：title_label, counter_label, counter_value, info_group, controls_group, phase_group,
+      exercise_combo, model_combo, camera_combo, rotation_switch, skeleton_switch,
+      mirror_switch, gpu_switch, decrease_button, increase_button, reset_button,
+      confirm_button, up_indicator, down_indicator, stage_value
+信号：exercise_changed, counter_reset, camera_changed, rotation_toggled,
+      skeleton_toggled, counter_increase, counter_decrease, record_confirmed,
+      model_changed, mirror_toggled, device_changed
+方法：setup_ui, setup_info_group, setup_controls_group, setup_phase_group,
+      _on_exercise_changed, set_exercise, _on_reset_counter, _on_camera_changed,
+      _on_rotation_toggled, _on_skeleton_toggled, _on_model_changed, _on_mirror_toggled,
+      _on_device_toggled, set_gpu_available, update_counter, update_phase,
+      show_success_animation, update_counter_style, reset_counter_style,
+      update_language, _update_combo_items, _on_increase_counter, _on_decrease_counter,
+      _on_confirm_record, load_exercise_display_map, get_exercises_file_path
+
+【改造要点】
+1. 标题 "护动智眸"：font-size: 20px, font-weight: 700, 用 #34C759（简化方案，去掉渐变）
+2. 计数器区域（info_group）：
+   - 去掉 QGroupBox 边框，改为 QWidget + 卡片背景 #1C1C1E + 24px 圆角
+   - counter_value：64pt, weight 300, 白色，居中
+   - counter_label：13px uppercase, #8E8E93
+   - 增加一个圆形进度环装饰（用 QProgressBar 或自定义绘制，圆环形，#34C759）
+3. 控制选项区域（controls_group）：
+   - 去掉 QGroupBox 边框，改为卡片
+   - 卡片标题用 QLabel："控制选项"，13px uppercase, #8E8E93
+   - 三个下拉框（运动/模型/摄像头）：深色样式，白字，圆角 12px
+   - 摄像头下拉框必须保留 scan_available_cameras 调用和 _camera_ids 映射
+   - 四个开关（旋转/骨架/镜像/GPU）：改用 SwitchControl（iOS 风格）
+   - GPU 开关的 setEnabled/setChecked 逻辑保留
+   - 按钮行：4 个等宽 pill 按钮，圆角 12px
+4. 阶段显示区域（phase_group）：
+   - 去掉 QGroupBox 边框，改为卡片
+   - UP/DOWN 指示器：改为大圆角 pill 形状（圆角 20px+），active 时颜色填充
+   - stage_value：24pt, weight 600, 白色，居中
+5. 整体布局增加卡片间距 16px
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+四、coach_panel.py（安全监测面板 — 状态卡片化）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【必须保留】
+- SafetyPanel 类
+- 所有方法：update_safety_status, update_stats, on_voice_toggled, is_voice_enabled
+- 所有控件：status_indicator, messages_label, stats_label, voice_toggle
+- 控件信号连接
+
+【改造要点】
+1. 整个面板改为无边框卡片：背景 #1C1C1E，圆角 24px，padding 20px
+2. 状态指示灯（status_indicator）：
+   - 去掉 emoji
+   - 安全：背景 rgba(52,199,89,0.15)，文字 #34C759，圆角 100px（pill），前面加绿色圆点
+   - 注意：背景 rgba(255,149,0,0.15)，文字 #FF9500，前面加橙色圆点
+   - 危险：背景 rgba(255,59,48,0.15)，文字 #FF3B30，前面加红色圆点
+   - 圆点用 QLabel + border-radius: 50% 实现，8px 大小
+3. 提示消息（messages_label）：
+   - 背景 #2C2C2E，圆角 12px
+   - 左侧 3px 彩色边框（根据等级：安全=#34C759，注意=#FF9500，危险=#FF3B30）
+   - 内边距 16px
+4. 统计行（stats_label）：font-size: 13px, color: #8E8E93
+5. 语音开关：改为 SwitchControl（iOS 风格），标签"语音提醒"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+五、video_display.py（视频显示 — 圆角+overlay）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【必须保留】
+- VideoDisplay 类及所有方法：update_image, resizeEvent, adjust_size, update_aspect_ratio, set_orientation
+- image_label, is_portrait, aspect_ratio
+
+【改造要点】
+1. 画面容器增加圆角：border-radius: 24px（通过设置父 QWidget 样式实现）
+2. 增加微妙边框：border: 1px solid #38383A
+3. 左上角增加信息 overlay（仿 iOS 风格小标签）：
+   - 创建两个 QLabel 作为 overlay："RTMPose · 实时检测" 和 "30 FPS"
+   - 样式：background: rgba(0,0,0,0.6), color: #FFFFFF, font-size: 11px,
+          padding: 4px 10px, border-radius: 100px
+   - 定位：absolute，top: 12px, left: 12px（用布局或 setGeometry）
+4. 保持黑色背景 #000000
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+六、custom_widgets.py（自定义控件 — iOS 风格开关）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【必须保留】
+- ToggleSwitch 类及所有方法和信号（paintEvent, update_text 等）
+- SwitchControl 类及所有方法和信号（switched, isChecked, setChecked, setText）
+
+【改造要点】
+1. ToggleSwitch：
+   - on_color: #34C759，off_color: #636366
+   - thumb_color: #FFFFFF
+   - 圆角保持 pill 形状（高度的一半）
+   - 去掉文字"开/关"，改为纯滑动开关（删除 update_text 中的 setText，paintEvent 中不绘制文字）
+   - 尺寸：宽度 50px，高度 28px，滑块直径 24px
+2. SwitchControl：
+   - 标签文字颜色 #FFFFFF，font-size: 15px
+   - 布局增加垂直居中和对齐
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+七、user_profile_panel.py（用户档案 — 深色表单）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【必须保留】
+- UserProfilePanel 类及所有方法（约 20+ 个）
+- profile_saved, profile_loaded 信号
+- 所有表单控件：name_edit, gender_combo, age_spin, height_spin, weight_spin, injury_checkboxes, no_injury_cb
+- 数据持久化逻辑（_load_profile, _save_profile, _populate_form, _collect_form_data）
+- 折叠展开逻辑（_toggle_expand, _is_expanded）
+
+【改造要点】
+1. 标题栏（_header）：
+   - 背景 #1C1C1E，hover #2C2C2E，圆角 12px
+   - 箭头用 #8E8E93，标题用 #FFFFFF
+2. 内容区（_content_frame）：
+   - 去掉边框，背景 #1C1C1E，圆角 0 0 12px 12px
+3. 输入框（QLineEdit, QComboBox, QSpinBox）：
+   - 统一使用 styles.py 的 get_dark_input_style()
+   - 背景 #2C2C2E，白字，圆角 12px，聚焦边框 #34C759
+4. 复选框区域：
+   - 改为 pill 形状选项卡片（类似 iOS 设置项）
+   - 选中状态：背景 rgba(52,199,89,0.1)，边框 #34C759
+   - 未选中状态：背景 #2C2C2E，无边框
+5. 按钮：保存 #34C759 绿底黑字，重置 #2C2C2E 灰底白字，圆角 12px
+6. 成功/错误提示：对应颜色背景 + 圆角 pill
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+八、workout_stats_panel.py（统计面板外壳 — 标签栏改造）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【必须保留】
+- WorkoutStatsPanel 类及所有方法
+- 所有信号：goal_updated, weekly_goal_updated, month_changed
+- 所有标签页引用：today_progress_tab, week_stats_tab, month_stats_tab, goals_tab
+- update_today_stats, update_week_stats, update_month_stats, set_goals, _on_month_changed, update_language
+
+【改造要点】
+1. 标题：font-weight: 300, font-size: 28px, #FFFFFF, letter-spacing: -0.5px
+2. QTabWidget 标签栏改造（重点）：
+   - 标签栏背景透明
+   - 选中标签：白色背景 #FFFFFF + 黑色文字 #000000 + 圆角 100px（pill 形状）+ padding 8px 20px
+   - 未选中标签：透明背景 + #8E8E93 文字
+   - 标签间距：8px
+   - 去掉 QTabWidget::pane 的边框和背景色
+   - QTabBar::tab 的 border 设为 none
+3. 标签页内容区背景：#000000（继承全局）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+九、stats_components 下的 4 个文件（统计面板内部 — 深色适配）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【today_tab.py — 今日进度】
+必须保留：progress_bars, count_labels, exercise_frames, exercise_name_labels,
+         no_goals_label, total_label, update_progress, update_total, update_language,
+         hide_all_exercises, show_exercises_with_goals, reset_progress
+改造：
+- 去掉所有 StyledGroupBox 的边框，改用 QWidget + 卡片背景
+- 进度条改用 styles.py 的 get_progressbar_style(color)（8px 高度，深色轨道）
+- 运动名称标签：#FFFFFF, font-weight: 600
+- 计数标签：#8E8E93
+- 无目标提示：#636366
+- 总数区域：卡片背景，大数字轻量字重
+- 滚动条改用深色样式
+
+【week_tab.py — 本周统计】
+必须保留：week_group, summary_group, stats_group, day_label, progress_label,
+         week_days_label, week_circle_indicator, week_stats_table,
+         update_stats, update_language, last_exercise_data
+改造：
+- 去掉 GroupBox 边框，卡片化
+- DayCircleIndicator（7天圆环指示器）：改为深色主题适配
+  - active_color: #34C759, inactive_color: #38383A, partial_color: rgba(52,199,89,0.4)
+- 统计表格：改用 styles.py 的 get_table_style()
+- 所有标签颜色改为 #8E8E93
+
+【month_tab.py — 本月统计】
+必须保留：month_group, summary_group, stats_group, month_nav_widget,
+         prev_month_btn, next_month_btn, month_label, month_days_label,
+         month_calendar_indicator, month_stats_table,
+         go_to_previous_month, go_to_next_month, update_month_display,
+         update_stats, update_language, current_year, current_month, min_date, max_date
+改造：
+- 月份导航按钮：#2C2C2E 背景，白字，圆角 12px，hover #38383A
+- 月份标签：#FFFFFF, font-weight: 600
+- MonthCalendarIndicator：深色主题适配
+  - active_color: #34C759, inactive_color: #38383A, partial_color: rgba(52,199,89,0.4)
+- 统计表格：深色样式
+
+【goals_tab.py — 目标设置】
+必须保留：daily_group, weekly_group, goal_spinboxes, exercise_name_labels,
+         target_labels, weekly_label, weekly_spinbox,
+         goal_updated, weekly_goal_updated, update_language, set_goals
+改造：
+- 去掉 GroupBox 边框，卡片化
+- QSpinBox：统一使用 styles.py 的 get_dark_input_style()
+- 运动名称标签：#FFFFFF
+- "目标"标签：#8E8E93, uppercase
+- 滚动条：深色样式
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+十、stats_components/base_components.py（基础组件 — 深色适配）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【必须保留】
+- StyledGroupBox, DayCircleIndicator, MonthCalendarIndicator, StyledStatsTable 类及所有方法
+
+【改造要点】
+1. StyledGroupBox：
+   - 背景 #1C1C1E，圆角 24px
+   - 去掉边框线
+   - 标题样式：13px uppercase, #8E8E93, letter-spacing: 0.5px
+2. DayCircleIndicator：
+   - 深色背景圆 #38383A
+   - 完成圆 #34C759
+   - 部分完成圆 rgba(52,199,89,0.5)
+3. MonthCalendarIndicator：
+   - 同上颜色方案
+4. StyledStatsTable：
+   - 表头背景 #2C2C2E，文字 #FFFFFF
+   - 数据行交替 #1C1C1E / #000000
+   - 选中行背景 rgba(10,132,255,0.2)
+   - 去掉网格线
+   - 文字颜色 #FFFFFF
+
+【最终检查清单】
+□ 所有下拉框都能正常展开和选择
+□ 摄像头切换后画面正常更新
+□ 四个开关（旋转/骨架/镜像/GPU）状态正确
+□ 计数增加/减少/重置/确认功能正常
+□ 阶段 UP/DOWN 指示器随运动变化
+□ 安全状态三级变化（绿/黄/红）正常
+□ 语音开关控制 TTS 播报
+□ 用户档案保存和加载正常
+□ 统计面板四个标签页切换正常
+□ 月份导航上一月/下一月正常
+□ 目标设置数值变化正常
+□ 语言切换后所有文字更新
+□ GPU 检测后开关自动启用

@@ -1,0 +1,14 @@
+{
+  "current_user": "default",
+  "users": {
+    "default": {
+      "name": "",
+      "gender": "male",
+      "age": 25,
+      "height": 170,
+      "weight": 65,
+      "injury_history": [],
+      "created_at": "2026-07-02"
+    }
+  }
+}

@@ -1,0 +1,49 @@
+# === MySQL 安装包和数据库 ===
+mysql-8.4.9-winx64/
+mysql.zip
+mysql-data/
+
+# === Node.js 依赖 ===
+**/node_modules/
+
+# === Python 打包产物 ===
+**/dist/
+**/build/
+**/__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# === IDE 配置 ===
+**/.idea/
+**/.vscode/
+**/.claude
+
+# === 敏感文件 ===
+.env
+**/.env
+!.env.example
+!**/.env.example
+
+# === 大文件 / 压缩包 ===
+*.7z
+*.zip
+*.rar
+*.pdb
+*.ibd
+
+# === 日志和临时文件 ===
+*.log
+*.tmp
+*.bak
+*.swp
+
+# === OS 文件 ===
+Thumbs.db
+.DS_Store
+
+# === 测试视频 ===
+**/videos/
+
+# === 崩溃日志 ===
+crash_*.txt

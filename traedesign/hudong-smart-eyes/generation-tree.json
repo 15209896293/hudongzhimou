@@ -1,0 +1,34 @@
+{
+  "nodeId": "gen-root",
+  "kind": "project-shell",
+  "output": "partials/project-shell.html",
+  "sharedRegions": ["topNav", "appFrame"],
+  "privateRegions": [],
+  "mutableSlots": ["activeNavItem", "mainContent"],
+  "status": "planned",
+  "pageIds": ["page-training", "page-stats"],
+  "children": [
+    {
+      "nodeId": "gen-page-training",
+      "kind": "page-leaf",
+      "output": "pages/training.html",
+      "sharedRegions": [],
+      "privateRegions": ["mainContent"],
+      "mutableSlots": [],
+      "status": "planned",
+      "pageIds": ["page-training"],
+      "children": []
+    },
+    {
+      "nodeId": "gen-page-stats",
+      "kind": "page-leaf",
+      "output": "pages/stats.html",
+      "sharedRegions": [],
+      "privateRegions": ["mainContent"],
+      "mutableSlots": [],
+      "status": "planned",
+      "pageIds": ["page-stats"],
+      "children": []
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "data": [
+    {
+      "id": "page-training",
+      "title": "运动训练模式",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1752036000000,
+      "canvasData": {
+        "x": 820,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/training.html",
+        "interactions": [
+          {
+            "domId": "nav-stats",
+            "targetPageId": "page-stats"
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-stats",
+      "title": "统计分析模式",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1752036000000,
+      "canvasData": {
+        "x": 200,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/stats.html",
+        "interactions": [
+          {
+            "domId": "nav-training",
+            "targetPageId": "page-training"
+          }
+        ]
+      }
+    },
+    {
+      "id": "image-001",
+      "title": "训练视频占位图",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1752036000000,
+      "canvasData": {
+        "x": 0,
+        "y": 377
+      },
+      "devMetadata": {
+        "imageSrc": "assets/training-video-placeholder.jpg"
+      }
+    }
+  ],
+  "config": {
+    "autoLayout": true,
+    "deviceType": "desktop",
+    "projectName": "护动智眸桌面端UI",
+    "designLibrary": null,
+    "showEdge": true
+  }
+}

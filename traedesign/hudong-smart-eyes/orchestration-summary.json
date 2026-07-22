@@ -1,0 +1,102 @@
+{
+  "project": {
+    "name": "护动智眸桌面端UI",
+    "operation": "create",
+    "operatingMode": "free-explore",
+    "deviceType": "desktop",
+    "designRead": "fitness desktop app / health-conscious users / clean professional / task-driven / generic flat cards",
+    "designDials": {
+      "layoutVariance": 2,
+      "motionIntensity": 2,
+      "visualDensity": 3
+    },
+    "generationTree": {
+      "nodeId": "gen-root",
+      "kind": "project-shell",
+      "output": "partials/project-shell.html",
+      "sharedRegions": ["topNav", "appFrame"],
+      "privateRegions": [],
+      "mutableSlots": ["activeNavItem", "mainContent"],
+      "status": "planned",
+      "pageIds": ["page-training", "page-stats"],
+      "children": [
+        {
+          "nodeId": "gen-page-training",
+          "kind": "page-leaf",
+          "output": "pages/training.html",
+          "sharedRegions": [],
+          "privateRegions": ["mainContent"],
+          "mutableSlots": [],
+          "status": "planned",
+          "pageIds": ["page-training"],
+          "children": []
+        },
+        {
+          "nodeId": "gen-page-stats",
+          "kind": "page-leaf",
+          "output": "pages/stats.html",
+          "sharedRegions": [],
+          "privateRegions": ["mainContent"],
+          "mutableSlots": [],
+          "status": "planned",
+          "pageIds": ["page-stats"],
+          "children": []
+        }
+      ]
+    }
+  },
+  "designSource": {
+    "operatingMode": "free-explore",
+    "brandCSSPath": "colors_and_type.css",
+    "styleConstraints": {
+      "radiusMax": 20,
+      "staticShadowAlphaMax": 0.05
+    }
+  },
+  "pages": [
+    {
+      "nodeId": "page-training",
+      "title": "运动训练模式",
+      "htmlSrc": "pages/training.html",
+      "pageIndex": 1,
+      "pageType": "task-driven",
+      "visualNorthStar": "Apple Fitness+ training screen with large video area, minimal right-side controls, safety status bar at video bottom",
+      "continuityAnchors": {
+        "topNav": "Consistent across both pages: brand name left, mode tabs center, user avatar right",
+        "surfaceLayering": "White cards on #F5F5F7 background with 0.05 alpha shadow, 20px radius",
+        "typeScale": "Inter font, 72pt hero numbers weight 200, 17px titles weight 600, 13px labels weight 500 uppercase"
+      },
+      "componentPlan": [],
+      "imagePlan": []
+    },
+    {
+      "nodeId": "page-stats",
+      "title": "统计分析模式",
+      "htmlSrc": "pages/stats.html",
+      "pageIndex": 2,
+      "pageType": "information-dense",
+      "visualNorthStar": "Apple Health dashboard with modular stat cards, progress rings, and clean data visualization",
+      "continuityAnchors": {
+        "topNav": "Consistent across both pages: brand name left, mode tabs center, user avatar right",
+        "surfaceLayering": "White cards on #F5F5F7 background with 0.05 alpha shadow, 20px radius",
+        "typeScale": "Inter font, 72pt hero numbers weight 200, 17px titles weight 600, 13px labels weight 500 uppercase"
+      },
+      "componentPlan": [],
+      "imagePlan": []
+    }
+  ],
+  "assets": [],
+  "wiringPlan": [
+    {
+      "fromPage": "page-training",
+      "domId": "nav-stats",
+      "toPage": "page-stats"
+    },
+    {
+      "fromPage": "page-stats",
+      "domId": "nav-training",
+      "toPage": "page-training"
+    }
+  ],
+  "hiddenInteractionPlan": []
+}
