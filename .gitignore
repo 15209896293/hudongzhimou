@@ -45,3 +45,4 @@ Thumbs.db
 # === Web 构建产物 ===
 web-app/dist/
 web-app/.vite/
+docs/~$*

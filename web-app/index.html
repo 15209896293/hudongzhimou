@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>护动智眸 — 运动健身防伤评估</title>
+  <meta name="description" content="基于浏览器实时姿态识别的运动健身防伤评估系统，以 FMS 功能性运动筛查为核心。">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Noto Sans CJK SC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="css/theme.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/skeleton.css">
+</head>
+<body>
+  <!-- 顶部导航 -->
+  <nav id="nav" class="nav-bar">
+    <div class="nav-brand">
+      <span class="nav-logo">护动智眸</span>
+      <span class="nav-subtitle">运动健身防伤评估</span>
+    </div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" data-page="training">训练</button>
+      <button class="nav-tab" data-page="report">报告</button>
+      <button class="nav-tab" data-page="settings">设置</button>
+    </div>
+    <div class="nav-status">
+      <span id="nav-username" class="nav-username"></span>
+      <button id="nav-login-btn" class="btn btn-ghost btn-sm">登录</button>
+    </div>
+  </nav>
+
+  <!-- 页面容器 -->
+  <main id="app" class="app-main">
+
+    <!-- ===== 训练页 ===== -->
+    <section id="page-training" class="page active">
+      <div class="training-header">
+        <div class="test-selector">
+          <label for="fms-test-select" class="field-label">筛查动作</label>
+          <select id="fms-test-select" class="select">
+            <option value="deep_squat">深蹲 (Deep Squat)</option>
+            <option value="hurdle_step">跨栏步 (Hurdle Step)</option>
+            <option value="inline_lunge">直线弓步 (In-Line Lunge)</option>
+            <option value="shoulder_mobility">肩关节灵活性 (Shoulder Mobility)</option>
+            <option value="aslr">主动直腿抬高 (ASLR)</option>
+            <option value="trunk_stability">躯干稳定性俯卧撑</option>
+            <option value="rotary_stability">旋转稳定性</option>
+          </select>
+        </div>
+        <div class="training-controls">
+          <button id="btn-start" class="btn btn-primary">开始检测</button>
+          <button id="btn-stop" class="btn btn-secondary" disabled>停止</button>
+          <button id="btn-snapshot" class="btn btn-ghost" disabled>记录评分</button>
+        </div>
+      </div>
+
+      <div class="training-body">
+        <!-- 左侧：摄像头画面 -->
+        <div class="camera-container">
+          <video id="camera-video" autoplay playsinline muted></video>
+          <canvas id="skeleton-canvas"></canvas>
+          <div id="risk-indicator"></div>
+          <div id="fps-display" style="display:none">FPS: 0</div>
+          <div id="loading-overlay" class="loading-overlay" style="display:none">
+            <div class="spinner"></div>
+            <p id="loading-text">正在加载姿态识别模型…</p>
+          </div>
+          <div id="camera-error" class="camera-error" style="display:none"></div>
+        </div>
+
+        <!-- 右侧：数据面板 -->
+        <div class="data-panel">
+          <div class="card fms-score-card">
+            <h3 class="card-title">当前评分</h3>
+            <div class="score-display">
+              <span id="fms-score" class="score-number">--</span>
+              <span class="score-max">/ 3</span>
+            </div>
+            <div id="fms-score-bar" class="score-bar">
+              <div class="score-bar-fill"></div>
+            </div>
+            <div id="fms-issues" class="issues-list"></div>
+          </div>
+
+          <div class="card angles-card">
+            <h3 class="card-title">关节角度</h3>
+            <div id="angles-list" class="angles-list">
+              <p class="empty-hint">开始检测后显示</p>
+            </div>
+          </div>
+
+          <div class="card alerts-card">
+            <h3 class="card-title">风险预警</h3>
+            <div id="alerts-list" class="alerts-list">
+              <p class="empty-hint">开始检测后显示</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 报告页 ===== -->
+    <section id="page-report" class="page">
+      <div id="report-content" class="report-grid">
+        <div class="card report-empty">
+          <p class="empty-hint">完成一次 FMS 筛查后，此处将展示评分报告</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 设置页 ===== -->
+    <section id="page-settings" class="page">
+      <div class="settings-container">
+        <div class="card settings-card">
+          <h3 class="card-title">用户信息</h3>
+          <div class="settings-form">
+            <div class="form-row">
+              <label class="field-label" for="set-nickname">昵称</label>
+              <input type="text" id="set-nickname" class="input" placeholder="未设置">
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="set-height">身高 (cm)</label>
+              <input type="number" id="set-height" class="input" placeholder="如 175">
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="set-weight">体重 (kg)</label>
+              <input type="number" id="set-weight" class="input" placeholder="如 70">
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="set-age">年龄</label>
+              <input type="number" id="set-age" class="input" placeholder="如 20">
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="set-injury">伤病历史</label>
+              <textarea id="set-injury" class="input textarea" placeholder="如：左膝关节半月板损伤史"></textarea>
+            </div>
+            <button id="btn-save-profile" class="btn btn-primary">保存信息</button>
+          </div>
+        </div>
+
+        <div class="card settings-card">
+          <h3 class="card-title">摄像头设置</h3>
+          <div class="settings-form">
+            <div class="form-row">
+              <label class="field-label" for="set-camera">摄像头设备</label>
+              <select id="set-camera" class="select">
+                <option value="">默认摄像头</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="set-mirror">镜像画面</label>
+              <label class="switch">
+                <input type="checkbox" id="set-mirror" checked>
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+            <button id="btn-refresh-cameras" class="btn btn-secondary btn-sm">刷新设备列表</button>
+          </div>
+        </div>
+
+        <div class="card settings-card">
+          <h3 class="card-title">模型与性能</h3>
+          <div class="settings-form">
+            <div class="form-row">
+              <label class="field-label" for="set-model">识别精度</label>
+              <select id="set-model" class="select">
+                <option value="lite">Lite（快，推荐）</option>
+                <option value="full">Full（精确，较慢）</option>
+                <option value="heavy">Heavy（最精确，最慢）</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label class="field-label" for="set-fps">目标帧率上限</label>
+              <select id="set-fps" class="select">
+                <option value="60">60 FPS</option>
+                <option value="30">30 FPS</option>
+                <option value="15">15 FPS（省电）</option>
+              </select>
+            </div>
+            <p class="settings-tip">低配设备若卡顿，请选择 Lite 精度并降低帧率。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Toast 提示 -->
+  <div id="toast" class="toast"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

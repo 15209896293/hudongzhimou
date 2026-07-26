@@ -63,3 +63,24 @@ END //
 DELIMITER ;
 CALL add_token_expires_at_column();
 DROP PROCEDURE IF EXISTS add_token_expires_at_column;
+
+-- FMS 评分记录表（新增）
+-- user_id 为 VARCHAR(64)，与 users.user_id 一致（非自增 INT）
+CREATE TABLE IF NOT EXISTS fms_records (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id VARCHAR(64) NOT NULL,
+  test_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+  deep_squat TINYINT DEFAULT 0,
+  hurdle_step TINYINT DEFAULT 0,
+  inline_lunge TINYINT DEFAULT 0,
+  shoulder_mobility TINYINT DEFAULT 0,
+  aslr TINYINT DEFAULT 0,
+  trunk_stability TINYINT DEFAULT 0,
+  rotary_stability TINYINT DEFAULT 0,
+  total_score INT DEFAULT 0,
+  asymmetry_flags JSON,
+  ai_analysis TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_user_time (user_id, test_date),
+  CONSTRAINT fk_fms_user FOREIGN KEY (user_id) REFERENCES users(user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

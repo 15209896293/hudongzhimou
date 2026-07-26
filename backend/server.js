@@ -8,13 +8,13 @@ require('dotenv').config();
 const pool = require('./db');
 const { tokenAuth } = require('./middleware/auth');
 const { generalLimiter, aiLimiter } = require('./middleware/rateLimit');
-const { analyzeAction } = require('./services/aiAnalyzer');
+const { analyzeAction, analyzeFMSAction, analyzeVisual } = require('./services/aiAnalyzer');
 
 const app = express();
 
 app.use(helmet());
 app.use(cors());
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '10mb' })); // 10mb: 支持视觉分析的 Base64 图片上传
 app.use(generalLimiter);
 
 // ========== 健康检查（无需认证） ==========
@@ -286,6 +286,107 @@ app.post('/api/analyze', tokenAuth, aiLimiter, async (req, res) => {
   } catch (err) {
     console.error('analyze error:', err.message);
     res.status(500).json({ success: false, error: 'AI analysis failed' });
+  }
+});
+
+// ========== 保存 FMS 评分记录（需要登录）==========
+app.post('/api/fms_save', tokenAuth, async (req, res) => {
+  try {
+    const userId = req.user.user_id;
+    const scores = req.body.scores || {};
+    const totalScore = req.body.total_score || 0;
+    const asymmetryFlags = req.body.asymmetry_flags || null;
+    const aiAnalysis = req.body.ai_analysis || null;
+
+    // 校验每项评分范围 0-3
+    const validTests = ['deep_squat', 'hurdle_step', 'inline_lunge', 'shoulder_mobility', 'aslr', 'trunk_stability', 'rotary_stability'];
+    const cleanScores = {};
+    for (const test of validTests) {
+      const v = scores[test];
+      cleanScores[test] = (typeof v === 'number' && v >= 0 && v <= 3) ? Math.round(v) : 0;
+    }
+
+    await pool.execute(
+      `INSERT INTO fms_records
+       (user_id, deep_squat, hurdle_step, inline_lunge, shoulder_mobility, aslr, trunk_stability, rotary_stability, total_score, asymmetry_flags, ai_analysis)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [userId, cleanScores.deep_squat, cleanScores.hurdle_step, cleanScores.inline_lunge,
+       cleanScores.shoulder_mobility, cleanScores.aslr, cleanScores.trunk_stability, cleanScores.rotary_stability,
+       Math.max(0, Math.min(21, totalScore)),
+       asymmetryFlags ? JSON.stringify(asymmetryFlags) : null,
+       aiAnalysis || null]
+    );
+
+    res.json({ success: true, data: { saved: true } });
+  } catch (err) {
+    console.error('fms_save error:', err.message);
+    res.status(500).json({ success: false, error: 'Database error' });
+  }
+});
+
+// ========== 获取 FMS 历史记录（需要登录）==========
+app.get('/api/fms_history', tokenAuth, async (req, res) => {
+  try {
+    const { limit = '50' } = req.query;
+    const userId = req.user.user_id;
+    const limitNum = Math.min(parseInt(limit) || 50, 200);
+
+    const [rows] = await pool.execute(
+      `SELECT id, test_date, deep_squat, hurdle_step, inline_lunge, shoulder_mobility,
+              aslr, trunk_stability, rotary_stability, total_score, asymmetry_flags, ai_analysis
+       FROM fms_records
+       WHERE user_id = ?
+       ORDER BY test_date DESC
+       LIMIT ${limitNum}`,
+      [userId]
+    );
+
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('fms_history error:', err.message);
+    res.status(500).json({ success: false, error: 'Database error' });
+  }
+});
+
+// ========== FMS 文本分析（需要登录 + AI限流）==========
+app.post('/api/ai_report', tokenAuth, aiLimiter, async (req, res) => {
+  try {
+    const { action_name, joint_sequence, injury_history } = req.body;
+    if (!action_name) {
+      return res.status(400).json({ success: false, error: 'action_name is required' });
+    }
+
+    const aiResult = await analyzeFMSAction(action_name, joint_sequence, injury_history);
+
+    if (!aiResult.success) {
+      return res.status(502).json({ success: false, error: aiResult.error, raw_text: aiResult.raw_text });
+    }
+
+    res.json({ success: true, data: aiResult.result });
+  } catch (err) {
+    console.error('ai_report error:', err.message);
+    res.status(500).json({ success: false, error: 'AI analysis failed' });
+  }
+});
+
+// ========== FMS 视觉分析（需要登录 + AI限流）==========
+app.post('/api/ai_visual', tokenAuth, aiLimiter, async (req, res) => {
+  try {
+    const { image, action_name, current_score } = req.body;
+    if (!image) {
+      return res.status(400).json({ success: false, error: 'image is required' });
+    }
+
+    const aiResult = await analyzeVisual(image, action_name, current_score || 0);
+
+    if (!aiResult.success) {
+      return res.status(502).json({ success: false, error: aiResult.error, raw_text: aiResult.raw_text });
+    }
+
+    res.json({ success: true, data: aiResult.result });
+  } catch (err) {
+    console.error('ai_visual error:', err.message);
+    res.status(500).json({ success: false, error: 'AI visual analysis failed' });
   }
 });
 
