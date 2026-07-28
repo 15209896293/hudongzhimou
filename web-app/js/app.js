@@ -6,11 +6,22 @@ import { FMSPanel } from './ui/fms-panel.js';
 import { Dashboard } from './ui/dashboard.js';
 import { ReportView } from './ui/report-view.js';
 import { Settings } from './ui/settings.js';
+import { TrainingPanel } from './ui/training-panel.js';
+import { StatsView } from './ui/stats-view.js';
+import { VoiceCoach } from './ui/voice-coach.js';
+import { TrainingSession } from './core/training-session.js';
+import { EXERCISE_LIST } from './core/exercise-library.js';
 import { ApiClient } from './services/api-client.js';
 import { AIAnalyzer } from './services/ai-analyzer.js';
 import { FMS_TESTS } from './core/fms-engine.js';
 import { storage, offlineQueue } from './utils/storage.js';
 import { throttle, formatDate } from './utils/helpers.js';
+
+// 已知虚拟摄像头关键词（小写匹配）
+const VIRTUAL_CAM_KEYWORDS = [
+  'ivcam', 'obs', 'virtual', 'manycam', 'snap camera',
+  'splitcam', 'ndi', 'mmhmm', 'epoccam', 'droidcam', 'youcam',
+];
 
 class App {
   constructor() {
@@ -20,11 +31,18 @@ class App {
     this.dashboard = new Dashboard();
     this.reportView = new ReportView();
     this.settings = new Settings();
+    this.trainingPanel = new TrainingPanel();
+    this.statsView = new StatsView();
+    this.voice = new VoiceCoach();
+    this.trainingSession = null;
     this.api = new ApiClient();
     this.ai = new AIAnalyzer();
 
     this.running = false;
     this.rafId = null;
+
+    // 当前模式：'fms' | 'training'
+    this.mode = 'fms';
 
     // 当前 FMS 筛查会话：累积各项评分
     this.session = { scores: {}, totalScore: 0, risk: null, testDate: null };
@@ -40,10 +58,13 @@ class App {
   async init() {
     this.bindNavigation();
     this.bindControls();
+    this.bindModeSwitch();
+    this.populateExerciseSelect();
     this.settings.bind(this.api.isLoggedIn() ? this.api : null, (m, t) => this.toast(m, t));
     this.refreshCameras();
     this.updateLoginUI();
     this.reportView.reset();
+    this.trainingPanel.reset();
 
     // 探测后端
     this.backendOnline = await this.api.ping();
@@ -63,6 +84,44 @@ class App {
     if (name === 'settings') this.refreshCameras();
   }
 
+  // ===== 模式切换（FMS / 训练）=====
+  bindModeSwitch() {
+    document.querySelectorAll('.mode-btn').forEach((btn) => {
+      btn.addEventListener('click', () => this.switchMode(btn.dataset.mode));
+    });
+  }
+
+  switchMode(mode) {
+    if (this.mode === mode) return;
+    if (this.running) {
+      this.toast('请先停止当前检测', 'error');
+      return;
+    }
+    this.mode = mode;
+    this.pipeline?.setMode(mode);
+
+    // 切换头部控件显隐
+    document.querySelectorAll('.fms-only').forEach((el) => el.style.display = mode === 'fms' ? '' : 'none');
+    document.querySelectorAll('.training-only').forEach((el) => el.style.display = mode === 'training' ? '' : 'none');
+
+    // 切换模式按钮高亮
+    document.querySelectorAll('.mode-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
+
+    // 重置面板
+    this.fmsPanel.reset();
+    this.dashboard.reset();
+    this.trainingPanel.reset();
+  }
+
+  /** 填充训练动作下拉 */
+  populateExerciseSelect() {
+    const sel = document.getElementById('exercise-select');
+    if (!sel) return;
+    sel.innerHTML = EXERCISE_LIST.map((e) =>
+      `<option value="${e.key}">${e.name}（${e.en}）${e.isStatic ? '· 静态' : ''}</option>`
+    ).join('');
+  }
+
   // ===== 控制 =====
   bindControls() {
     document.getElementById('btn-start').addEventListener('click', () => this.startTraining());
@@ -73,52 +132,113 @@ class App {
       this.fmsPanel.reset();
       this.dashboard.reset();
     });
+    document.getElementById('exercise-select')?.addEventListener('change', (e) => {
+      if (this.pipeline && this.mode === 'training') this.pipeline.setExercise(e.target.value);
+    });
+    // 训练模式控制按钮
+    document.getElementById('btn-train-start')?.addEventListener('click', () => this.startTrainingSession());
+    document.getElementById('btn-train-pause')?.addEventListener('click', () => this.togglePauseTraining());
+    document.getElementById('btn-train-stop')?.addEventListener('click', () => this.stopTrainingSession());
     document.getElementById('nav-login-btn').addEventListener('click', () => this.openLoginModal());
   }
 
   // ===== 摄像头 + 主循环 =====
-  async startTraining() {
-    const btnStart = document.getElementById('btn-start');
-    const btnStop = document.getElementById('btn-stop');
-    const btnSnap = document.getElementById('btn-snapshot');
+  /** 共享：摄像头初始化 + 管线加载 + 渲染视图（FMS / 训练共用） */
+  async _initCameraPipeline() {
     const overlay = document.getElementById('loading-overlay');
     const loadingText = document.getElementById('loading-text');
 
-    try {
-      // 启动摄像头
-      const constraints = {
-        video: this.settings.get('cameraDeviceId')
-          ? { deviceId: { exact: this.settings.get('cameraDeviceId') } }
-          : { facingMode: 'user' },
-      };
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      const video = document.getElementById('camera-video');
-      video.srcObject = stream;
-      await video.play();
+    // 启动摄像头：用户指定设备 → 真实物理设备（需先拿权限才能识别 label）→ 自动选择
+    let stream;
+    const savedDeviceId = this.settings.get('cameraDeviceId');
+    if (savedDeviceId) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: savedDeviceId } } });
+      } catch { /* 设备可能被占用，fallback */ }
+    }
+    if (!stream) {
+      // 先用默认方式获取流（同时拿到摄像头权限 + track.label）
+      stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      // 检查默认流是否选中了虚拟摄像头
+      const isVirtual = this._isVirtualCamera(stream.getVideoTracks()[0]?.label);
+      if (isVirtual) {
+        // 停止虚拟流，重新枚举（此时已有权限，label 可读），找真实设备
+        stream.getTracks().forEach((t) => t.stop());
+        const realCamId = await this._findRealCamera();
+        if (realCamId) {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: realCamId } } });
+          } catch { /* 真实设备被占用，回退到默认流 */ }
+        }
+        if (!stream) {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        }
+      }
+    }
+    const video = document.getElementById('camera-video');
+    video.srcObject = stream;
 
-      // 初始化管线（按需）
-      if (!this.pipeline || this.pipeline.needsReinit) {
-        overlay.style.display = 'flex';
-        loadingText.textContent = '正在加载姿态识别模型…';
-        this.pipeline = new FramePipeline({ maxFps: this.settings.get('maxFps') });
+    // 确保 video 真正播放（某些浏览器需要显式调用 play）
+    try {
+      await video.play();
+    } catch (playErr) {
+      console.warn('[App] video.play() 失败，尝试静音后重试:', playErr);
+      video.muted = true;
+      await video.play();
+    }
+
+    // 应用镜像设置（从用户偏好读取）
+    const container = document.querySelector('.camera-container');
+    if (container) {
+      container.classList.toggle('mirrored', this.settings.get('mirror'));
+    }
+
+    // 等 video 真正有帧数据（readyState >= 2），否则 MediaPipe 会在空帧上检测到噪声
+    if (video.readyState < 2) {
+      await new Promise((resolve) => {
+        video.addEventListener('loadeddata', resolve, { once: true });
+        setTimeout(resolve, 3000); // 超时兜底
+      });
+    }
+
+    // 验证视频流是否真正活跃（防止黑屏：某些情况下 stream 已断开）
+    const track = stream.getVideoTracks()[0];
+    if (!track || track.readyState !== 'live') {
+      throw new Error('摄像头流未就绪，请检查设备是否被其他程序占用');
+    }
+
+    // 初始化管线（按需）
+    if (!this.pipeline || this.pipeline.needsReinit) {
+      overlay.style.display = 'flex';
+      loadingText.textContent = '正在加载姿态识别模型…';
+      this.pipeline = new FramePipeline({ maxFps: this.settings.get('maxFps') });
+      try {
         await this.pipeline.init({ variant: this.settings.get('modelVariant') }, (msg) => {
           loadingText.textContent = msg;
         });
+      } catch (initErr) {
         overlay.style.display = 'none';
+        throw new Error('模型加载失败：' + (initErr.message || String(initErr)) + '。请刷新页面重试，或检查网络连接。');
       }
+      overlay.style.display = 'none';
+    }
 
-      // 初始化渲染视图
-      if (!this.cameraView) {
-        this.cameraView = new CameraView(video, document.getElementById('skeleton-canvas'), {
-          mirror: this.settings.get('mirror'),
-        });
-      }
-      this.cameraView.setMirror(this.settings.get('mirror'));
+    // 初始化渲染视图
+    if (!this.cameraView) {
+      this.cameraView = new CameraView(video, document.getElementById('skeleton-canvas'));
+    }
 
+    return video;
+  }
+
+  async startTraining() {
+    const overlay = document.getElementById('loading-overlay');
+    try {
+      await this._initCameraPipeline();
       this.running = true;
-      btnStart.disabled = true;
-      btnStop.disabled = false;
-      btnSnap.disabled = false;
+      document.getElementById('btn-start').disabled = true;
+      document.getElementById('btn-stop').disabled = false;
+      document.getElementById('btn-snapshot').disabled = false;
       this.toast('检测已开始', 'success');
       this.loop();
     } catch (err) {
@@ -133,18 +253,36 @@ class App {
     const video = document.getElementById('camera-video');
     const result = this.pipeline.process(video);
     if (result) {
-      this._latestResult = result;
+      // 有新检测结果时才重绘骨架，避免每帧清屏导致闪烁
       this.cameraView.render(result);
-      this.fmsPanel.update(result.fms);
-      this.dashboard.updateAngles(result.fms);
-      this.dashboard.updateAlerts(result.safety);
+      this._latestResult = result;
+      this._staleFrames = 0;
 
-      // 收集关节角度序列供 AI 分析
-      this._collectJointData(result);
+      if (this.mode === 'training' && result.mode === 'training') {
+        // 训练模式：会话聚合 + 面板渲染
+        const snap = this.trainingSession?.onFrame(result);
+        this.trainingPanel.update(snap, result.rep);
+      } else {
+        // FMS 模式：评分面板 + 角度 + 预警
+        this.fmsPanel.update(result.fms);
+        this.dashboard.updateAngles(result.fms);
+        this.dashboard.updateAlerts(result.safety);
 
-      // 触发节流后的 AI 分析
-      if (result.fms && result.fms.score <= 2) {
-        this._aiThrottled(result);
+        // 收集关节角度序列供 AI 分析
+        this._collectJointData(result);
+
+        // 触发节流后的 AI 分析
+        if (result.fms && result.fms.score <= 2) {
+          this._aiThrottled(result);
+        }
+      }
+    } else {
+      // 帧率节流或偶尔检测不到时保留上一帧骨架，不闪烁
+      // 连续 ~0.5s 无新结果才清屏（人物离开画面等情况）
+      this._staleFrames = (this._staleFrames || 0) + 1;
+      if (this._staleFrames > 30) {
+        this.cameraView.render(null);
+        this._staleFrames = 0;
       }
     }
     this.rafId = requestAnimationFrame(() => this.loop());
@@ -163,6 +301,85 @@ class App {
     document.getElementById('btn-stop').disabled = true;
     document.getElementById('btn-snapshot').disabled = true;
     this.toast('检测已停止', 'success');
+  }
+
+  // ===== 训练模式会话控制 =====
+  async startTrainingSession() {
+    const overlay = document.getElementById('loading-overlay');
+    try {
+      await this._initCameraPipeline();
+
+      // 设置训练模式 + 动作
+      this.pipeline.setMode('training');
+      const exerciseKey = document.getElementById('exercise-select').value;
+      this.pipeline.setExercise(exerciseKey);
+
+      // 启动训练会话
+      this.trainingSession = new TrainingSession({ voice: this.voice });
+      this.trainingSession.start(exerciseKey);
+      this.trainingPanel.reset();
+
+      this.running = true;
+      document.getElementById('btn-train-start').disabled = true;
+      document.getElementById('btn-train-pause').disabled = false;
+      document.getElementById('btn-train-stop').disabled = false;
+      this.toast('训练已开始', 'success');
+      this.loop();
+    } catch (err) {
+      console.error(err);
+      this.showCameraError(err);
+      overlay.style.display = 'none';
+    }
+  }
+
+  togglePauseTraining() {
+    if (!this.trainingSession) return;
+    const btn = document.getElementById('btn-train-pause');
+    if (this.trainingSession.state === 'running') {
+      this.trainingSession.pause();
+      btn.textContent = '继续';
+    } else if (this.trainingSession.state === 'paused') {
+      this.trainingSession.resume();
+      btn.textContent = '暂停';
+    }
+  }
+
+  stopTrainingSession() {
+    this.running = false;
+    if (this.rafId) cancelAnimationFrame(this.rafId);
+    const video = document.getElementById('camera-video');
+    if (video.srcObject) {
+      video.srcObject.getTracks().forEach((t) => t.stop());
+      video.srcObject = null;
+    }
+    if (this.cameraView) this.cameraView.clear();
+
+    // 生成摘要并保存
+    if (this.trainingSession) {
+      const summary = this.trainingSession.stop();
+      this._saveTrainingRecord(summary);
+    }
+
+    document.getElementById('btn-train-start').disabled = false;
+    document.getElementById('btn-train-pause').disabled = true;
+    document.getElementById('btn-train-stop').disabled = true;
+    document.getElementById('btn-train-pause').textContent = '暂停';
+    this.toast('训练已结束，记录已保存', 'success');
+  }
+
+  /** 保存训练记录到本地 + 后端 */
+  async _saveTrainingRecord(summary) {
+    // 本地保存（统计页读取）
+    StatsView.saveRecord(summary);
+
+    // 后端保存（如果在线）
+    if (this.api.isLoggedIn() && this.backendOnline) {
+      try {
+        await this.api.saveTrainingRecord(summary);
+      } catch (e) {
+        console.warn('训练记录上传失败，已保存本地', e);
+      }
+    }
   }
 
   // ===== 评分记录 =====
@@ -186,6 +403,20 @@ class App {
   }
 
   _renderReport() {
+    const reportEl = document.getElementById('report-content');
+    const statsEl = document.getElementById('stats-content');
+
+    // 训练模式：渲染训练统计页
+    if (this.mode === 'training') {
+      if (reportEl) reportEl.style.display = 'none';
+      if (statsEl) statsEl.style.display = '';
+      this.statsView.render();
+      return;
+    }
+    // FMS 模式：渲染 FMS 评分报告
+    if (reportEl) reportEl.style.display = '';
+    if (statsEl) statsEl.style.display = 'none';
+
     const scoreCount = Object.keys(this.session.scores).length;
     if (scoreCount === 0) {
       this.reportView.reset();
@@ -371,11 +602,34 @@ class App {
   // ===== 辅助 =====
   refreshCameras() { this.settings.refreshCameras(); }
 
+  /** 判断摄像头 label 是否属于虚拟设备 */
+  _isVirtualCamera(label) {
+    const l = (label || '').toLowerCase();
+    return VIRTUAL_CAM_KEYWORDS.some((kw) => l.includes(kw));
+  }
+
+  /** 在可用摄像头中找到真实物理设备（跳过虚拟摄像头；无 label 的设备也跳过） */
+  async _findRealCamera() {
+    if (!navigator.mediaDevices?.enumerateDevices) return null;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cams = devices.filter((d) => d.kind === 'videoinput');
+      // 只保留 label 非空且不是虚拟设备的摄像头
+      const real = cams.filter((c) => c.label && !this._isVirtualCamera(c.label));
+      return real[0]?.deviceId || null;
+    } catch {
+      return null;
+    }
+  }
+
   showCameraError(err) {
     const el = document.getElementById('camera-error');
     let msg = '摄像头启动失败';
     if (err.name === 'NotAllowedError') msg = '摄像头权限被拒绝，请在浏览器设置中允许访问';
     else if (err.name === 'NotFoundError') msg = '未找到摄像头设备';
+    else if (err.name === 'NotReadableError') msg = '摄像头被其他程序占用，请关闭后重试';
+    else if (err.name === 'OverconstrainedError') msg = '摄像头不满足要求，请更换设备';
+    else if (err.message) msg = err.message;
     el.textContent = msg;
     el.style.display = 'flex';
     this.toast(msg, 'error');

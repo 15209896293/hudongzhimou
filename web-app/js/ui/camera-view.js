@@ -1,19 +1,17 @@
-// 摄像头画面 + 彩色骨架渲染
-// 在 Canvas 上叠加彩色骨架线，风险关节红色脉冲
+// 骨架渲染
+// 职责单一：在 Canvas 上画骨架线 + 关键点 + 风险脉冲
+// 视频画面由 <video> 元素直接显示（CSS 负责镜像），Canvas 是透明层叠在上面
 
-// 骨架连接定义（分组配色，对应 theme.css）
 export const POSE_CONNECTIONS = {
   torso: [[11, 12], [11, 23], [12, 24], [23, 24]],
   leftArm: [[11, 13], [13, 15]],
   rightArm: [[12, 14], [14, 16]],
   leftLeg: [[23, 25], [25, 27], [27, 31]],
   rightLeg: [[24, 26], [26, 28], [28, 32]],
-  // 辅助连接（脸/脚，用淡色）
   face: [[0, 11], [0, 12]],
 };
 
-// 与 theme.css 骨架色保持一致
-const COLORS = {
+export const COLORS = {
   torso: '#FF9F0A',
   leftArm: '#30D158',
   rightArm: '#64D2FF',
@@ -24,7 +22,6 @@ const COLORS = {
   risk: '#FF453A',
 };
 
-// joint + side → 关键点索引映射
 const JOINT_INDEX = {
   knee: { left: 25, right: 26 },
   pelvis: { left: 23, right: 24, both: [23, 24] },
@@ -34,7 +31,6 @@ const JOINT_INDEX = {
   hamstring: { left: 25, right: 26 },
 };
 
-/** 从 safety alerts 提取需高亮的风险关键点索引集合 */
 export function riskLandmarkIndices(alerts) {
   const set = new Set();
   for (const a of alerts || []) {
@@ -53,19 +49,13 @@ export class CameraView {
     this.video = video;
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
-    this.mirror = opts.mirror !== false;
     this.fpsEl = document.getElementById('fps-display');
     this.riskEl = document.getElementById('risk-indicator');
     this._pulse = 0;
+    this._mirror = true;
   }
 
-  setMirror(on) {
-    this.mirror = on;
-    this.video.style.transform = on ? 'scaleX(-1)' : 'none';
-    this.canvas.style.transform = on ? 'scaleX(-1)' : 'none';
-  }
-
-  /** 同步 canvas 尺寸到视频实际分辨率 */
+  /** 同步 Canvas 绘制缓冲区到视频分辨率 */
   syncSize() {
     const w = this.video.videoWidth || 640;
     const h = this.video.videoHeight || 480;
@@ -76,26 +66,45 @@ export class CameraView {
   }
 
   /**
-   * 渲染一帧：清屏 → 画骨架线 → 画关键点 → 风险脉冲
-   * @param {{landmarks:Array, safety:{level,alerts}, fps:number}} output
+   * 渲染骨架（output 为 null 时只清屏）
    */
   render(output) {
     this.syncSize();
-    const { landmarks, safety, fps } = output;
     const w = this.canvas.width;
     const h = this.canvas.height;
+
+    // 清屏（透明 → 露出下方 video 画面）
     this.ctx.clearRect(0, 0, w, h);
 
-    if (!landmarks || landmarks.length < 33) return;
+    const { landmarks, safety, fps } = output || {};
+    if (!landmarks || landmarks.length < 33) {
+      this._updateRiskIndicator(null);
+      return;
+    }
 
+    // 画骨架
+    this._drawSkeleton(landmarks, safety, w, h);
+
+    // FPS
+    if (this.fpsEl && fps != null) {
+      this.fpsEl.style.display = 'block';
+      this.fpsEl.textContent = `FPS: ${fps}`;
+    }
+
+    this._updateRiskIndicator(safety?.level);
+  }
+
+  // ── 骨架绘制 ──
+
+  _drawSkeleton(landmarks, safety, w, h) {
     const riskSet = riskLandmarkIndices(safety?.alerts);
     this._pulse = (this._pulse + 0.08) % (Math.PI * 2);
 
-    // 1. 画连线
+    // 连线
     this.ctx.lineWidth = 4;
     this.ctx.lineCap = 'round';
     for (const [group, conns] of Object.entries(POSE_CONNECTIONS)) {
-      this.ctx.strokeStyle = COLORS[group] || '#FFFFFF';
+      this.ctx.strokeStyle = COLORS[group] || '#FFF';
       for (const [a, b] of conns) {
         const pa = landmarks[a], pb = landmarks[b];
         if (!pa || !pb || (pa.visibility ?? 0) < 0.3 || (pb.visibility ?? 0) < 0.3) continue;
@@ -106,7 +115,7 @@ export class CameraView {
       }
     }
 
-    // 2. 画关键点
+    // 关键点
     for (let i = 0; i < landmarks.length; i++) {
       const p = landmarks[i];
       if (!p || (p.visibility ?? 0) < 0.3) continue;
@@ -114,7 +123,6 @@ export class CameraView {
       const isRisk = riskSet.has(i);
       const r = isRisk ? 7 + Math.sin(this._pulse) * 2 : 6;
 
-      // 风险关节：红色光晕
       if (isRisk) {
         this.ctx.beginPath();
         this.ctx.arc(px, py, r + 5, 0, Math.PI * 2);
@@ -122,29 +130,18 @@ export class CameraView {
         this.ctx.fill();
       }
 
-      // 白色填充
       this.ctx.beginPath();
       this.ctx.arc(px, py, r, 0, Math.PI * 2);
       this.ctx.fillStyle = COLORS.joint;
       this.ctx.fill();
-      // 彩色描边
       this.ctx.lineWidth = 2;
       this.ctx.strokeStyle = isRisk ? COLORS.risk : this._jointColor(i);
       this.ctx.stroke();
     }
-
-    // FPS 显示
-    if (this.fpsEl && fps) {
-      this.fpsEl.style.display = 'block';
-      this.fpsEl.textContent = `FPS: ${fps}`;
-    }
-
-    // 风险等级标识
-    this._updateRiskIndicator(safety?.level);
   }
 
   _jointColor(i) {
-    if ([11, 13, 15, 23, 25, 27, 31].includes(i)) return COLORS.leftArm; // 左侧统一色感
+    if ([11, 13, 15, 23, 25, 27, 31].includes(i)) return COLORS.leftArm;
     if ([12, 14, 16, 24, 26, 28, 32].includes(i)) return COLORS.rightArm;
     return COLORS.torso;
   }

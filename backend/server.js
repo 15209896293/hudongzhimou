@@ -2,6 +2,7 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const crypto = require('crypto');
+const path = require('path');
 const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
@@ -12,10 +13,38 @@ const { analyzeAction, analyzeFMSAction, analyzeVisual } = require('./services/a
 
 const app = express();
 
-app.use(helmet());
+// 配置 CSP：MediaPipe 已本地托管，仅保留 Tailwind CDN 和 Google Fonts
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: [
+        "'self'",
+        "'wasm-unsafe-eval'",            // MediaPipe WASM 编译需要
+        "https://cdn.tailwindcss.com",   // Tailwind CSS CDN
+      ],
+      connectSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "blob:"],
+      styleSrc: ["'self'", "https://fonts.googleapis.com", "'unsafe-inline'"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      mediaSrc: ["'self'", "blob:"],
+      workerSrc: ["'self'", "blob:"],
+      objectSrc: ["'none'"],
+    },
+  },
+}));
 app.use(cors());
 app.use(express.json({ limit: '10mb' })); // 10mb: 支持视觉分析的 Base64 图片上传
 app.use(generalLimiter);
+
+// ========== MIME 类型修正（MediaPipe 本地文件）==========
+app.use('/libs', (req, res, next) => {
+  const ext = path.extname(req.path);
+  if (ext === '.mjs') res.type('text/javascript');
+  else if (ext === '.wasm') res.type('application/wasm');
+  else if (ext === '.task') res.type('application/octet-stream');
+  next();
+});
 
 // ========== 健康检查（无需认证） ==========
 app.get('/health', (req, res) => {
@@ -159,7 +188,7 @@ app.post('/api/logout', tokenAuth, async (req, res) => {
 // ========== 更新用户档案（需要登录） ==========
 app.post('/api/update_profile', tokenAuth, async (req, res) => {
   try {
-    const { height, weight, age, injury_history, nickname } = req.body;
+    const { height, weight, age, injury_history, nickname, gender } = req.body;
     const userId = req.user.user_id;
 
     await pool.execute(
@@ -167,11 +196,12 @@ app.post('/api/update_profile', tokenAuth, async (req, res) => {
        height = ?, weight = ?, age = ?,
        injury_history = ?,
        nickname = COALESCE(?, nickname),
+       gender = ?,
        updated_at = NOW()
        WHERE user_id = ?`,
       [height || null, weight || null, age || null,
        injury_history ? JSON.stringify(injury_history) : null,
-       nickname || null, userId]
+       nickname || null, gender || '', userId]
     );
 
     res.json({ success: true });
@@ -187,7 +217,7 @@ app.get('/api/get_profile', tokenAuth, async (req, res) => {
     const userId = req.user.user_id;
 
     const [rows] = await pool.execute(
-      'SELECT user_id, username, nickname, height, weight, age, injury_history, updated_at FROM users WHERE user_id = ?',
+      'SELECT user_id, username, nickname, gender, height, weight, age, injury_history, updated_at FROM users WHERE user_id = ?',
       [userId]
     );
 
@@ -202,6 +232,7 @@ app.get('/api/get_profile', tokenAuth, async (req, res) => {
         user_id: user.user_id,
         username: user.username,
         nickname: user.nickname,
+        gender: user.gender || '',
         height: user.height,
         weight: user.weight,
         age: user.age,
@@ -264,6 +295,69 @@ app.get('/api/get_records', tokenAuth, async (req, res) => {
     res.json({ success: true, data: rows });
   } catch (err) {
     console.error('get_records error:', err.message);
+    res.status(500).json({ success: false, error: 'Database error' });
+  }
+});
+
+// ========== 保存训练记录（新接口，需要登录） ==========
+app.post('/api/training_save', tokenAuth, async (req, res) => {
+  try {
+    const userId = req.user.user_id;
+    const {
+      exercise, exerciseName, category, duration, reps,
+      avgQuality, qualityHistory, safetyEventCount, dangerCount,
+      warningCount, safetyEvents, fatigueWarnings, isFatigued, endTime
+    } = req.body;
+
+    if (!exercise) {
+      return res.status(400).json({ success: false, error: 'exercise is required' });
+    }
+
+    await pool.execute(
+      `INSERT INTO training_records
+       (user_id, exercise_type, exercise_name, category, count, duration_sec,
+        avg_quality, quality_history, safety_event_count, danger_count,
+        warning_count, safety_events, fatigue_warnings, is_fatigued, end_time, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [userId, exercise, exerciseName || null, category || null,
+       Number(reps) || 0, Number(duration) || 0,
+       avgQuality !== undefined ? Math.min(100, Math.max(0, avgQuality)) : 0,
+       qualityHistory ? JSON.stringify(qualityHistory) : null,
+       safetyEventCount || 0, dangerCount || 0, warningCount || 0,
+       safetyEvents ? JSON.stringify(safetyEvents) : null,
+       fatigueWarnings ? JSON.stringify(fatigueWarnings) : null,
+       isFatigued ? 1 : 0,
+       endTime || null]
+    );
+
+    res.json({ success: true, data: { saved: true } });
+  } catch (err) {
+    console.error('training_save error:', err.message);
+    res.status(500).json({ success: false, error: 'Database error' });
+  }
+});
+
+// ========== 获取训练历史记录（新接口，需要登录） ==========
+app.get('/api/training_history', tokenAuth, async (req, res) => {
+  try {
+    const { limit = '50' } = req.query;
+    const userId = req.user.user_id;
+    const limitNum = Math.min(parseInt(limit) || 50, 200);
+
+    const [rows] = await pool.execute(
+      `SELECT id, exercise_type, exercise_name, category, count, duration_sec,
+              avg_quality, safety_event_count, danger_count, warning_count,
+              is_fatigued, end_time, created_at
+       FROM training_records
+       WHERE user_id = ?
+       ORDER BY created_at DESC
+       LIMIT ${limitNum}`,
+      [userId]
+    );
+
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('training_history error:', err.message);
     res.status(500).json({ success: false, error: 'Database error' });
   }
 });
@@ -390,6 +484,18 @@ app.post('/api/ai_visual', tokenAuth, aiLimiter, async (req, res) => {
   }
 });
 
+// ========== 静态文件服务（前端）==========
+const webAppDir = path.join(__dirname, '..', 'web-app');
+app.use(express.static(webAppDir));
+
+// SPA 回退：非 API 的 GET 请求返回 index.html
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ success: false, error: 'API not found' });
+  }
+  res.sendFile(path.join(webAppDir, 'index.html'));
+});
+
 // 全局错误处理
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err.message);
@@ -398,5 +504,10 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`\n========================================`);
+  console.log(`  护动智眸服务已启动`);
+  console.log(`  前端: http://localhost:${PORT}`);
+  console.log(`  API:  http://localhost:${PORT}/api`);
+  console.log(`  健康检查: http://localhost:${PORT}/health`);
+  console.log(`========================================\n`);
 });

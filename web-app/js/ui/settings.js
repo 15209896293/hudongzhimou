@@ -44,7 +44,12 @@ export class Settings {
 
     if (setModel) setModel.addEventListener('change', () => this.set('modelVariant', setModel.value));
     if (setFps) setFps.addEventListener('change', () => this.set('maxFps', parseInt(setFps.value)));
-    if (setMirror) setMirror.addEventListener('change', () => this.set('mirror', setMirror.checked));
+    if (setMirror) setMirror.addEventListener('change', () => {
+      this.set('mirror', setMirror.checked);
+      // 实时应用镜像到当前画面
+      const container = document.querySelector('.camera-container');
+      if (container) container.classList.toggle('mirrored', setMirror.checked);
+    });
     if (setCamera) setCamera.addEventListener('change', () => this.set('cameraDeviceId', setCamera.value));
 
     if (btnRefreshCam) {
@@ -63,11 +68,23 @@ export class Settings {
     const sel = document.getElementById('set-camera');
     if (!sel || !navigator.mediaDevices?.enumerateDevices) return;
     try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
+      // 如果没有权限，先获取一次
+      let devices;
+      try { devices = await navigator.mediaDevices.enumerateDevices(); } catch {
+        const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
+        tmp.getTracks().forEach((t) => t.stop());
+        devices = await navigator.mediaDevices.enumerateDevices();
+      }
       const cams = devices.filter((d) => d.kind === 'videoinput');
+      const virtualKeywords = ['ivcam', 'obs', 'virtual', 'manycam', 'snap camera', 'splitcam', 'ndi', 'mmhmm', 'epoccam', 'droidcam', 'youcam'];
       const cur = this.prefs.cameraDeviceId;
-      sel.innerHTML = '<option value="">默认摄像头</option>' +
-        cams.map((c, i) => `<option value="${c.deviceId}" ${c.deviceId === cur ? 'selected' : ''}>摄像头 ${i + 1}${c.label ? ' (' + c.label.slice(0, 20) + ')' : ''}</option>`).join('');
+      sel.innerHTML = '<option value="">自动（跳过虚拟设备）</option>' +
+        cams.map((c) => {
+          const label = c.label || '未知设备';
+          const isVirtual = virtualKeywords.some((kw) => label.toLowerCase().includes(kw));
+          const tag = isVirtual ? ' ⚠️虚拟' : '';
+          return `<option value="${c.deviceId}" ${c.deviceId === cur ? 'selected' : ''}>${label.slice(0, 40)}${tag}</option>`;
+        }).join('');
     } catch (e) {
       console.warn('enumerate cameras failed', e);
     }
@@ -92,6 +109,7 @@ export class Settings {
   _fillProfile(p) {
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
     set('set-nickname', p.nickname);
+    set('set-gender', p.gender);
     set('set-height', p.height);
     set('set-weight', p.weight);
     set('set-age', p.age);
@@ -103,6 +121,7 @@ export class Settings {
     const injuryText = get('set-injury');
     const data = {
       nickname: get('set-nickname'),
+      gender: get('set-gender') || null,
       height: get('set-height') ? parseInt(get('set-height')) : null,
       weight: get('set-weight') ? parseInt(get('set-weight')) : null,
       age: get('set-age') ? parseInt(get('set-age')) : null,

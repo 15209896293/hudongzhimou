@@ -1,7 +1,7 @@
 // MediaPipe Pose Landmarker 封装
 // 官方文档：https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker/web_js
-
-import { FilesetResolver, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs';
+// 注意：MediaPipe 使用动态 import（在 init 中按需加载），避免顶层静态 import
+// 导致 CDN 不可用时整个模块链崩溃、页面所有按钮失效。
 
 // MediaPipe Pose 33 关键点索引
 export const POSE_LANDMARKS = {
@@ -24,13 +24,15 @@ export const POSE_LANDMARKS = {
 };
 
 // 模型 URL 映射（精度可选）
+// 本地托管：避免国内 CDN 访问慢/被墙导致模型加载卡死
 const MODEL_URLS = {
-  lite: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
-  full: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
-  heavy: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task',
+  lite: '/libs/mediapipe/models/pose_landmarker_lite.task',
+  full: '/libs/mediapipe/models/pose_landmarker_lite.task',  // 暂复用 lite，如需 full 可下载
+  heavy: '/libs/mediapipe/models/pose_landmarker_lite.task', // 暂复用 lite
 };
 
-const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm';
+// WASM 运行时：本地托管
+const WASM_URL = '/libs/mediapipe/wasm';
 
 /**
  * MediaPipe 姿态检测封装
@@ -44,26 +46,109 @@ export class PoseDetector {
   }
 
   /**
+   * 检测当前设备是否为移动端（用于决定是否跳过 GPU 尝试）
+   * 某些移动端浏览器 WebGL 报错不抛异常而是静默失败，直接用 CPU 更稳妥
+   */
+  _isMobile() {
+    return /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(navigator.userAgent)
+      || (navigator.maxTouchPoints > 1 && window.innerWidth < 768);
+  }
+
+  /**
+   * 带超时的 Promise 包装
+   * 移动端网络慢时 WASM 加载可能卡住，15 秒超时防止无限等待
+   */
+  _withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} 超时（${ms / 1000}s）`)), ms)
+      ),
+    ]);
+  }
+
+  /**
    * 初始化加载模型（首次调用，约 5MB 下载）
+   * 移动端策略：直接使用 CPU 模式，跳过 GPU 尝试（避免静默失败）
+   * 桌面端策略：先 GPU，失败后 CPU 回退
    * @param {object} [opts] - { variant: 'lite'|'full'|'heavy' }
    * @param {(msg: string) => void} [onProgress] - 加载进度回调
    */
   async init(opts = {}, onProgress) {
     this.modelVariant = opts.variant || 'lite';
     const modelPath = MODEL_URLS[this.modelVariant] || MODEL_URLS.lite;
+    const isMobile = this._isMobile();
 
+    // 第一步：加载 WASM 运行时（带超时）
     if (onProgress) onProgress('正在加载 WASM 运行时…');
-    const vision = await FilesetResolver.forVisionTasks(WASM_URL);
+    let FilesetResolver, PoseLandmarker;
+    try {
+      const mod = await this._withTimeout(
+        import('/libs/mediapipe/vision_bundle.mjs'),
+        15000,
+        'WASM 模块加载'
+      );
+      FilesetResolver = mod.FilesetResolver;
+      PoseLandmarker = mod.PoseLandmarker;
+    } catch (importErr) {
+      throw new Error('WASM 运行时加载失败：' + (importErr.message || importErr) + '。请检查网络连接后刷新页面。');
+    }
 
-    if (onProgress) onProgress('正在加载姿态识别模型…');
-    this.landmarker = await PoseLandmarker.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath: modelPath,
-        delegate: 'GPU',
-      },
-      runningMode: 'VIDEO',
-      numPoses: 1,
-    });
+    // 第二步：初始化 FilesetResolver（加载 .wasm 文件）
+    let vision;
+    try {
+      vision = await this._withTimeout(
+        FilesetResolver.forVisionTasks(WASM_URL),
+        20000,
+        'WASM 文件初始化'
+      );
+    } catch (fsErr) {
+      throw new Error('WASM 文件初始化失败：' + (fsErr.message || fsErr) + '。请刷新页面重试。');
+    }
+
+    // 第三步：创建 PoseLandmarker（模型加载）
+    // 移动端直接 CPU；桌面端先 GPU 再 CPU 回退
+    const delegate = isMobile ? 'CPU' : 'GPU';
+
+    if (onProgress) {
+      onProgress(isMobile
+        ? '正在加载姿态识别模型（CPU 模式）…'
+        : '正在加载姿态识别模型（GPU 加速）…');
+    }
+
+    try {
+      this.landmarker = await this._withTimeout(
+        PoseLandmarker.createFromOptions(vision, {
+          baseOptions: { modelAssetPath: modelPath, delegate },
+          runningMode: 'VIDEO',
+          numPoses: 1,
+        }),
+        30000,
+        '模型创建'
+      );
+    } catch (err) {
+      // 桌面端 GPU 失败时回退到 CPU
+      if (!isMobile && delegate === 'GPU') {
+        console.warn('[PoseDetector] GPU 模式失败，回退到 CPU:', err);
+        if (onProgress) onProgress('GPU 不可用，正在切换到 CPU 模式…');
+        this.landmarker = await this._withTimeout(
+          PoseLandmarker.createFromOptions(vision, {
+            baseOptions: { modelAssetPath: modelPath, delegate: 'CPU' },
+            runningMode: 'VIDEO',
+            numPoses: 1,
+          }),
+          30000,
+          'CPU 模型创建'
+        );
+      } else {
+        throw new Error('模型加载失败：' + (err.message || err) + '。请刷新页面重试。');
+      }
+    }
+
+    // 验证 landmarker 真正可用（防止静默失败：对象创建成功但 detect 不工作）
+    if (!this.landmarker || typeof this.landmarker.detectForVideo !== 'function') {
+      throw new Error('模型初始化异常：landmarker 对象不可用。请刷新页面重试。');
+    }
   }
 
   /**

@@ -1,9 +1,24 @@
 // 后端 API 调用封装
 // 路径沿用现有下划线动词式风格；FMS 相关为新增接口
 
-const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  ? 'http://localhost:3000/api'
-  : '/api';
+// 解析后端 API 地址：
+// 1. config.local.js 中配置了 BACKEND_URL 字符串 → 直接使用
+// 2. 同源（后端直接托管前端）→ 相对路径 /api
+// 3. 跨域（如 Cloudflare Pages）→ 回退到 localhost:3000（本地开发）
+function resolveApiBase() {
+  const cfg = window.HDZM_CONFIG || {};
+  if (typeof cfg.BACKEND_URL === 'string' && cfg.BACKEND_URL !== 'auto') {
+    return cfg.BACKEND_URL;
+  }
+  const origin = window.location.origin;
+  if (origin === 'http://localhost:3000' || origin === 'http://127.0.0.1:3000') {
+    return '/api';
+  }
+  // Cloudflare Pages 等静态托管：需在 config.local.js 配置后端地址
+  // 未配置时回退到 localhost（仅本地开发可用）
+  return 'http://localhost:3000/api';
+}
+const API_BASE = resolveApiBase();
 
 export class ApiClient {
   constructor() {
@@ -58,6 +73,14 @@ export class ApiClient {
   }
   getFMSHistory(limit = 50) {
     return this.request(`/fms_history?limit=${limit}`);
+  }
+
+  // ---- 训练记录 ----
+  saveTrainingRecord(summary) {
+    return this.request('/training_save', { method: 'POST', body: JSON.stringify(summary) });
+  }
+  getTrainingHistory(limit = 50) {
+    return this.request(`/training_history?limit=${limit}`);
   }
 
   // ---- AI 分析（FMS 专用新接口）----

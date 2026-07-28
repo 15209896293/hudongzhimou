@@ -87,4 +87,79 @@ export class SafetyChecker {
       alerts.push({ type: 'knee_valgus', side, severity: 'warning', joint: 'knee', message: `${side === 'left' ? '左' : '右'}膝内扣`, value: Math.round(valgus) });
     }
   }
+
+  /**
+   * 训练模式专用：按动作配置检测
+   * @param {Array} landmarks - MediaPipe 33 点
+   * @param {object} exerciseConfig - EXERCISES[key] 的配置
+   * @param {object} adjustedThresholds - 个性化后的安全阈值
+   * @returns {{ level: 'safe'|'warning'|'danger', alerts: Array }}
+   */
+  checkForExercise(landmarks, exerciseConfig, adjustedThresholds) {
+    const alerts = [];
+    if (!landmarks || landmarks.length < 33) {
+      return { level: 'safe', alerts };
+    }
+
+    // 按动作配置的关节逐个检测
+    for (const [joint, threshold] of Object.entries(adjustedThresholds || {})) {
+      const angle = this._getJointAngle(landmarks, joint);
+      if (angle == null) continue;
+
+      if (angle < threshold.min || angle > threshold.max) {
+        alerts.push({
+          type: `${joint}_danger`,
+          severity: 'danger',
+          joint,
+          message: exerciseConfig.voiceTips[`${joint}_min`] || exerciseConfig.voiceTips[`${joint}_max`] || `${joint}角度超出安全范围`,
+          value: Math.round(angle),
+        });
+      } else if (angle < threshold.warning_min || angle > threshold.warning_max) {
+        alerts.push({
+          type: `${joint}_warning`,
+          severity: 'warning',
+          joint,
+          message: exerciseConfig.voiceTips[`${joint}_min`] || exerciseConfig.voiceTips[`${joint}_max`] || `${joint}角度接近安全边界`,
+          value: Math.round(angle),
+        });
+      }
+    }
+
+    // 同时保留通用规则（膝内扣、骨盆倾斜、躯干前倾、不对称）
+    const general = this.check(landmarks);
+    alerts.push(...general.alerts);
+
+    const level = alerts.some((a) => a.severity === 'danger') ? 'danger'
+      : alerts.some((a) => a.severity === 'warning') ? 'warning'
+      : 'safe';
+
+    return { level, alerts };
+  }
+
+  /** 计算指定关节的角度（左右均值） */
+  _getJointAngle(landmarks, joint) {
+    const jointMap = {
+      knee: { pts: [23, 25, 27], mirror: [24, 26, 28] },
+      elbow: { pts: [11, 13, 15], mirror: [12, 14, 16] },
+      shoulder: { pts: [13, 11, 23], mirror: [14, 12, 24] },
+      back: { pts: [11, 23, 25], mirror: [12, 24, 26] },
+      lower_back: { pts: [11, 23, 25], mirror: [12, 24, 26] },
+      hip: { pts: [11, 23, 25], mirror: [12, 24, 26] },
+      neck: { pts: [7, 11, 12], mirror: [8, 12, 11] },
+      spine: { pts: [11, 23, 25], mirror: [12, 24, 26] },
+    };
+    const cfg = jointMap[joint];
+    if (!cfg) return null;
+    const a = pt(landmarks, cfg.pts[0]);
+    const b = pt(landmarks, cfg.pts[1]);
+    const c = pt(landmarks, cfg.pts[2]);
+    const am = pt(landmarks, cfg.mirror[0]);
+    const bm = pt(landmarks, cfg.mirror[1]);
+    const cm = pt(landmarks, cfg.mirror[2]);
+    if (!vis(a) || !vis(b) || !vis(c)) return null;
+    const angleL = calculateAngle(a, b, c);
+    if (!vis(am) || !vis(bm) || !vis(cm)) return angleL;
+    const angleR = calculateAngle(am, bm, cm);
+    return (angleL + angleR) / 2;
+  }
 }

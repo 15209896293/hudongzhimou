@@ -2,13 +2,26 @@
 
 .camera-container {
   position: relative;
-  background: #000;
-  border-radius: var(--radius-lg);
+  flex: 1;
+  background: var(--bg-camera, #000);
   overflow: hidden;
-  aspect-ratio: 4 / 3;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
 }
 
-.camera-container video,
+/* video 负责显示画面，镜像由 JS 动态控制（.mirrored 类） */
+.camera-container video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+}
+
+/* canvas 透明叠加在 video 上方，镜像与 video 同步 */
 .camera-container canvas {
   position: absolute;
   top: 0;
@@ -16,11 +29,15 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transform: scaleX(-1); /* 镜像：用户看自己像照镜子 */
+  z-index: 2;
+  background: transparent;
+  pointer-events: none;
 }
 
-#skeleton-canvas {
-  background: transparent;
+/* 镜像模式：video 和 canvas 同时翻转 */
+.camera-container.mirrored video,
+.camera-container.mirrored canvas {
+  transform: scaleX(-1);
 }
 
 /* 风险等级标识 */
@@ -91,4 +108,29 @@
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* 摄像头错误提示 */
+.camera-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: var(--bg-camera, #000);
+  color: var(--risk-danger);
+  font-size: 14px;
+  text-align: center;
+  z-index: 8;
+}
+
+/* 移动端：FPS 显示隐藏（HUD 底部条替代） */
+@media (max-width: 767px) {
+  #fps-display {
+    top: 8px;
+    right: 8px;
+    font-size: 10px;
+    padding: 3px 8px;
+  }
 }

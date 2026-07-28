@@ -1,4 +1,48 @@
-node_modules/
+# === Node.js 依赖 ===
+**/node_modules/
+
+# === Python 产物 ===
+**/dist/
+**/build/
+**/__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# === IDE 配置 ===
+**/.idea/
+**/.vscode/
+**/.claude
+
+# === 敏感文件 ===
 .env
+**/.env
+!.env.example
+!**/.env.example
+
+# === 大文件 / 压缩包 ===
+*.7z
+*.zip
+*.rar
+
+# === 日志和临时文件 ===
 *.log
+*.tmp
+*.bak
+*.swp
+
+# === OS 文件 ===
+Thumbs.db
 .DS_Store
+
+# === TRAE 临时文件 ===
+.trae-html-share-packages/
+.uploads/
+
+# === 测试视频 ===
+**/videos/
+
+# === Web 构建产物 ===
+web-app/dist/
+web-app/.vite/
+docs/~$*
