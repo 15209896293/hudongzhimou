@@ -32,7 +32,8 @@ const MODEL_URLS = {
 };
 
 // WASM 运行时：本地托管
-const WASM_URL = '/libs/mediapipe/wasm';
+// 目录名含版本号 _v2 用于缓存破坏（避免 Cloudflare immutable 缓存旧错误响应）
+const WASM_URL = '/libs/mediapipe/wasm_v2';
 
 /**
  * MediaPipe 姿态检测封装
